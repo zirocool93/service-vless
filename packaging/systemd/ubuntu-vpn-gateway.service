@@ -1,0 +1,26 @@
+[Unit]
+Description=Ubuntu VPN Gateway
+Documentation=file:/usr/share/doc/ubuntu-vpn-gateway/installation.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+ExecStart=/usr/local/bin/ubuntu-vpn-gateway serve --xray-bin /usr/local/lib/ubuntu-vpn-gateway/xray
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=20s
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ubuntu-vpn-gateway /etc/ubuntu-vpn-gateway
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target
