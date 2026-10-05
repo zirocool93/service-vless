@@ -109,8 +109,14 @@ rollback() {
         cp -a -- "$BACKUP_DIR/secrets/." "$SECRETS_DIR/" || failures+=("не восстановлены secrets")
       fi
       if [[ -f $BACKUP_DIR/installed-version ]]; then install -m 0600 "$BACKUP_DIR/installed-version" "$DATA_DIR/installed-version" || failures+=("не восстановлен manifest версии"); fi
-      if [[ -d $BACKUP_DIR/app-root ]]; then cp -a -- "$BACKUP_DIR/app-root/." "$APP_ROOT/" || failures+=("не восстановлены installer-файлы"); fi
-      if [[ -d $BACKUP_DIR/doc ]]; then cp -a -- "$BACKUP_DIR/doc/." /usr/share/doc/ubuntu-vpn-gateway/ || failures+=("не восстановлена документация"); fi
+      if [[ -d $BACKUP_DIR/app-root ]]; then
+        rm -rf -- "$APP_ROOT" || failures+=("не очищен новый app-root")
+        cp -a -- "$BACKUP_DIR/app-root" "$APP_ROOT" || failures+=("не восстановлены installer-файлы")
+      fi
+      if [[ -d $BACKUP_DIR/doc ]]; then
+        rm -rf -- /usr/share/doc/ubuntu-vpn-gateway || failures+=("не очищена новая документация")
+        cp -a -- "$BACKUP_DIR/doc" /usr/share/doc/ubuntu-vpn-gateway || failures+=("не восстановлена документация")
+      fi
       if [[ -f $BACKUP_DIR/ubuntu-vpn-gateway-update ]]; then
         install -m 0755 "$BACKUP_DIR/ubuntu-vpn-gateway-update" /usr/local/bin/ubuntu-vpn-gateway-update || failures+=("не восстановлен updater")
       else
@@ -124,7 +130,7 @@ rollback() {
       systemctl start "$SERVICE" || failures+=("прежняя служба не запустилась после прерванного backup")
     elif $MUTATED && ! $HAD_INSTALL; then
       systemctl disable "$SERVICE" >/dev/null 2>&1 || true
-      rm -f -- "$UNIT_PATH" "$APP_BIN" /usr/local/bin/ubuntu-vpn-gateway-update || failures+=("не удалены файлы неудачной первичной установки")
+      rm -f -- "$UNIT_PATH" "$UNIT_PATH.new" "$APP_BIN" "$APP_BIN.new" /usr/local/bin/ubuntu-vpn-gateway-update /usr/local/bin/ubuntu-vpn-gateway-update.new || failures+=("не удалены файлы неудачной первичной установки")
       rm -rf -- "$APP_ROOT" /usr/share/doc/ubuntu-vpn-gateway || failures+=("не удалены каталоги неудачной первичной установки")
       systemctl daemon-reload || failures+=("daemon-reload после очистки завершился ошибкой")
       echo "Созданные данные и secrets сохранены для безопасного повторного запуска." >&2
