@@ -33,10 +33,11 @@ type Status struct {
 
 // TestResult содержит результаты уровней проверки без синтетических метрик.
 type TestResult struct {
-	Service  bool   `json:"service"`
-	Endpoint bool   `json:"endpoint"`
-	Internet bool   `json:"internet"`
-	ExitIP   string `json:"exit_ip,omitempty"`
+	Service   bool   `json:"service"`
+	Endpoint  bool   `json:"endpoint"`
+	Internet  bool   `json:"internet"`
+	ExitIP    string `json:"exit_ip,omitempty"`
+	LatencyMS int    `json:"latency_ms,omitempty"`
 }
 
 // Provider задаёт контракт интеграции с будущим провайдером.

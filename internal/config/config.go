@@ -8,18 +8,26 @@ import (
 	"time"
 )
 
-// Config содержит параметры запуска. MaxConcurrent зарезервирован для будущих
-// операций провайдера; Phase0 не инициирует подключения.
+// Config содержит параметры запуска и предел одновременных проверок узлов.
 type Config struct {
 	Listen            string
 	MaxConcurrent     int
+	DataDir           string
+	SecretsDir        string
+	XrayBin           string
+	SocksPort         int
+	HTTPPort          int
+	DevHTTP           bool
 	ReadHeaderTimeout time.Duration
 	ShutdownTimeout   time.Duration
 }
 
 func (c Config) Validate() error {
-	if c.MaxConcurrent < 1 || c.MaxConcurrent > 32 {
-		return fmt.Errorf("max-concurrent должен быть от 1 до 32")
+	if c.MaxConcurrent < 1 || c.MaxConcurrent > 5 {
+		return fmt.Errorf("max-concurrent должен быть от 1 до 5")
+	}
+	if (c.SocksPort != 0 || c.HTTPPort != 0) && (c.SocksPort < 1 || c.SocksPort > 65535 || c.HTTPPort < 1 || c.HTTPPort > 65535 || c.SocksPort == c.HTTPPort) {
+		return fmt.Errorf("порты proxy должны быть различными числами от 1 до 65535")
 	}
 	if c.ReadHeaderTimeout < 0 || c.ShutdownTimeout < 0 {
 		return fmt.Errorf("таймауты не могут быть отрицательными")
@@ -60,6 +68,27 @@ func validHostname(host string) bool {
 
 // WithDefaults задаёт безопасные таймауты HTTP-сервера.
 func (c Config) WithDefaults() Config {
+	if c.Listen == "" {
+		c.Listen = ":8443"
+	}
+	if c.MaxConcurrent == 0 {
+		c.MaxConcurrent = 5
+	}
+	if c.DataDir == "" {
+		c.DataDir = "/var/lib/ubuntu-vpn-gateway"
+	}
+	if c.SecretsDir == "" {
+		c.SecretsDir = "/etc/ubuntu-vpn-gateway/secrets"
+	}
+	if c.XrayBin == "" {
+		c.XrayBin = "/usr/local/bin/xray"
+	}
+	if c.SocksPort == 0 {
+		c.SocksPort = 1080
+	}
+	if c.HTTPPort == 0 {
+		c.HTTPPort = 8080
+	}
 	if c.ReadHeaderTimeout == 0 {
 		c.ReadHeaderTimeout = 5 * time.Second
 	}

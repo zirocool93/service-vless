@@ -17,7 +17,7 @@ func TestValidateRejectsInvalidBindAndConcurrency(t *testing.T) {
 		name, bind  string
 		concurrency int
 	}{
-		{"missing-port", "127.0.0.1", 1}, {"zero-port", "127.0.0.1:0", 1}, {"bad-port", "localhost:abc", 1}, {"bad-host", "bad host:80", 1}, {"zero-concurrency", "127.0.0.1:80", 0}, {"too-many", "127.0.0.1:80", 33},
+		{"missing-port", "127.0.0.1", 1}, {"zero-port", "127.0.0.1:0", 1}, {"bad-port", "localhost:abc", 1}, {"bad-host", "bad host:80", 1}, {"zero-concurrency", "127.0.0.1:80", 0}, {"too-many", "127.0.0.1:80", 6},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := (Config{Listen: tc.bind, MaxConcurrent: tc.concurrency}).Validate(); err == nil {
