@@ -1,23 +1,20 @@
-# Разработка и проверка Phase 0
+# Разработка и проверка
 
-Нужны Go 1.24+ и Node.js с npm; для `npm ci` используется зафиксированный `web/package-lock.json`. Для проверки версий Go в CI применяются 1.26 и 1.27. На Windows команды Go и npm можно запускать отдельно, а `make` — из WSL Ubuntu 24.04 либо другой среды с GNU Make. Сетевые функции Linux здесь отсутствуют.
+Нужны Go 1.26+ и Node.js/npm; зависимости закреплены в web/package-lock.json. CI проверяет Go 1.26/1.27. На Windows запускайте npm.cmd и команды Go отдельно либо используйте GNU Make через WSL.
 
 ```sh
 make build
-./bin/gateway serve --listen 127.0.0.1:8443
+./bin/gateway init --data-dir .ssh/local-data --secrets-dir .ssh/local-secrets
+./bin/gateway serve --dev-http --listen 127.0.0.1:8443 --data-dir .ssh/local-data --secrets-dir .ssh/local-secrets --xray-bin /absolute/path/to/xray
 ```
 
-`make build` сначала выполняет `npm ci` и `npm run build` в `web/`, затем собирает Go-бинарник с `web/dist` через `embed`. Порт 8443 в Phase 0 обслуживает **обычный HTTP**: откройте `http://127.0.0.1:8443/`. Не публикуйте этот сервер в сеть. По умолчанию `gateway serve` слушает `127.0.0.1:8443`; `--max-concurrent` сейчас только проверяемый параметр конфигурации.
+При init сохраните выведенный пароль администратора. Повторный init пароль не меняет. Откройте http://127.0.0.1:8443/ для локальной разработки. Без --dev-http сервер использует HTTPS; HTTP вне loopback запрещён. Production-каталоги и systemd описаны в installation.md.
 
 ```sh
 make check
-make run
 curl http://127.0.0.1:8443/api/v1/health
-curl http://127.0.0.1:8443/api/v1/status
 ```
 
-`make check` выполняет ESLint, проверку типов, сборку UI, `gofmt`, `go vet`, Go-тесты и сборку под Linux amd64. Go-проверки выбирают пакеты `./cmd/... ./internal/... ./web`, чтобы исключить сторонние Go-примеры внутри npm-зависимостей. Ответ health: `{"status":"ok","message":"Сервис работает"}`; status возвращает `disconnected` и русское сообщение. Это демонстрационное состояние, а не проверка VPN. Неизвестный API-маршрут возвращает JSON 404. В чистом checkout `web/dist` отсутствует, поэтому frontend обязательно собирается до Go; используйте `make build`.
+make check выполняет frontend lint/typecheck/test/build, проверку gofmt, vet, Go-тесты и Linux amd64 build. В чистом checkout web/dist отсутствует: frontend обязательно собирается до Go. Node.js не нужен на сервере после сборки встроенного UI. Остальные API кроме health и auth требуют входа; изменяющие запросы требуют X-CSRF-Token.
 
-Для разработки UI отдельно: `cd web && npm ci && npm run dev`. Для встроенной версии после каждого изменения UI повторно запускайте `make build`. Go-тесты не требуют root и не изменяют маршруты. Интеграционные проверки systemd, nftables, TUN, AWG и восстановления сети будут проводиться на изолированной Ubuntu VM после реализации соответствующих фаз.
-
-При подготовке использовался portable Go 1.27.1: официальный архив проверен по SHA256 из JSON каталога загрузок `go.dev/dl/?mode=json`. Найденная среда WSL — Ubuntu 24.04. Эти сведения описывают локальную среду подготовки и не заменяют CI и проверку на VM.
+Локальные Go-тесты не меняют системную сеть. Реальные VLESS SOCKS5/HTTP проверки на Ubuntu описаны в test-environment.md. Full Tunnel, AWG и независимый rollback требуют отдельной интеграционной приёмки. После изменения UI пересоберите Go-бинарник и перезапустите его: embed содержит снимок assets на момент компиляции.

@@ -1,4 +1,4 @@
-name: Проверка Phase 0
+name: Проверка Ubuntu VPN Gateway
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
         run: npm ci
         working-directory: web
       - name: Проверить интерфейс
-        run: npm run lint && npm run typecheck && npm run build
+        run: npm run lint && npm run typecheck && npm run test && npm run build
         working-directory: web
       - uses: actions/setup-go@v5
         with:
