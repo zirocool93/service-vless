@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/secrets"
+	"github.com/zirocool93/service-vless/internal/secrets"
 	_ "modernc.org/sqlite"
 )
 

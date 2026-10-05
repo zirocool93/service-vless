@@ -1,0 +1,123 @@
+name: Сборка и публикация релиза
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Существующий тег релиза, например v0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.inputs.version || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ github.event.inputs.version || github.ref_name }}
+    steps:
+      - name: Проверить версию
+        run: '[[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]'
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.VERSION }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.x'
+      - name: Проверить и собрать интерфейс
+        working-directory: web
+        run: npm ci && npm run lint && npm run typecheck && npm run test && npm run build
+      - name: Проверить Go и скрипты
+        run: |
+          test -z "$(gofmt -l cmd internal web/embed.go)"
+          go vet ./cmd/... ./internal/... ./web
+          go test -race ./cmd/... ./internal/... ./web
+          for script in scripts/*.sh scripts/tests/*.sh; do
+            bash -n "$script"
+          done
+      - name: Проверить bootstrap и release на mock-окружении
+        run: sudo bash scripts/tests/bootstrap-release.sh
+      - name: Собрать архивы amd64 и arm64
+        run: bash scripts/build-release.sh "$VERSION"
+      - name: Передать проверенные архивы шагу публикации
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ env.VERSION }}
+          path: bin/releases/${{ env.VERSION }}/*
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ github.event.inputs.version || github.ref_name }}
+    steps:
+      - name: Получить проверенные архивы
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets-${{ env.VERSION }}
+          path: release-assets
+      - name: Создать или продолжить draft и опубликовать после проверки
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -Eeuo pipefail
+          [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          release_dir="release-assets"
+          amd64="ubuntu-vpn-gateway_${VERSION}_linux_amd64.tar.gz"
+          arm64="ubuntu-vpn-gateway_${VERSION}_linux_arm64.tar.gz"
+          expected=$(printf '%s\n' SHA256SUMS "$amd64" "$arm64" | sort)
+
+          cat > release-notes.md <<EOF
+          Ubuntu VPN Gateway $VERSION: HTTPS-панель, VLESS RAW/XHTTP, подписки и локальные SOCKS5/HTTP-прокси.
+
+          Архивы содержат gateway, Xray 26.3.27, установщик, unit и лицензии. Проверяйте их по SHA256SUMS. Инструкция: https://github.com/${{ github.repository }}/blob/$VERSION/docs/installation.md
+
+          Full Tunnel, failover и подключение AmneziaWG в этот выпуск не входят.
+          EOF
+
+          if release_json=$(gh release view "$VERSION" --json isDraft,assets 2>/dev/null); then
+            [[ $(jq -r '.isDraft' <<<"$release_json") == true ]] || {
+              echo "Релиз $VERSION уже опубликован и считается неизменяемым." >&2
+              exit 1
+            }
+          else
+            gh release create "$VERSION" --verify-tag --draft --title "Ubuntu VPN Gateway $VERSION" --notes-file release-notes.md
+          fi
+
+          gh release upload "$VERSION" "$release_dir/$amd64" "$release_dir/$arm64" "$release_dir/SHA256SUMS" --clobber
+
+          release_json=$(gh release view "$VERSION" --json isDraft,assets)
+          [[ $(jq -r '.isDraft' <<<"$release_json") == true ]]
+          actual=$(jq -r '.assets[].name' <<<"$release_json" | sort)
+          [[ "$actual" == "$expected" ]] || { echo "Набор файлов draft не совпадает с ожидаемым:" >&2; printf '%s\n' "$actual" >&2; exit 1; }
+          for file in SHA256SUMS "$amd64" "$arm64"; do
+            local_size=$(stat -c '%s' "$release_dir/$file")
+            remote_size=$(jq -r --arg name "$file" '.assets[] | select(.name==$name) | .size' <<<"$release_json")
+            [[ "$remote_size" == "$local_size" ]] || { echo "Размер $file после загрузки не совпал." >&2; exit 1; }
+          done
+
+          verify_dir=$(mktemp -d)
+          trap 'rm -rf -- "$verify_dir"' EXIT
+          gh release download "$VERSION" --dir "$verify_dir" --pattern SHA256SUMS --pattern "$amd64" --pattern "$arm64"
+          cmp --silent "$release_dir/SHA256SUMS" "$verify_dir/SHA256SUMS"
+          (cd "$verify_dir" && sha256sum --check SHA256SUMS)
+
+          gh release edit "$VERSION" --draft=false --latest --notes-file release-notes.md

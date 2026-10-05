@@ -1,4 +1,4 @@
-module github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway
+module github.com/zirocool93/service-vless
 
 go 1.26.0
 

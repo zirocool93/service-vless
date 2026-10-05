@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-exec bash "$SCRIPT_DIR/install.sh" "$@"
+umask 077
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)
+exec bash "$SCRIPT_DIR/bootstrap.sh" "$@"

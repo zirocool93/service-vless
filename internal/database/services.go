@@ -8,7 +8,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/services"
+	"github.com/zirocool93/service-vless/internal/services"
 )
 
 func (d *DB) UpsertNode(ctx context.Context, n services.Node) error {

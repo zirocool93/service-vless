@@ -3,8 +3,8 @@ package services
 import (
 	"context"
 	"errors"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/proxy/subscription"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/proxy/xray"
+	"github.com/zirocool93/service-vless/internal/proxy/subscription"
+	"github.com/zirocool93/service-vless/internal/proxy/xray"
 	"time"
 )
 

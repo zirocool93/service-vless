@@ -1,7 +1,7 @@
 package subscription
 
 import (
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/proxy/xray"
+	"github.com/zirocool93/service-vless/internal/proxy/xray"
 	"net/netip"
 	"os"
 	"os/exec"

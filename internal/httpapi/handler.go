@@ -8,8 +8,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/provider"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/web"
+	"github.com/zirocool93/service-vless/internal/provider"
+	"github.com/zirocool93/service-vless/web"
 )
 
 type response struct {

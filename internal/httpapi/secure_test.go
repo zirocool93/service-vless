@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/auth"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/database"
+	"github.com/zirocool93/service-vless/internal/auth"
+	"github.com/zirocool93/service-vless/internal/database"
 )
 
 func secureFixture(t *testing.T) (http.Handler, *database.DB, string) {

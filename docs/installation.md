@@ -1,66 +1,99 @@
 # Установка и обновление
 
-Подготовлен installer для Ubuntu с systemd, устанавливающий нативные бинарники без Docker. Проверка bash-синтаксиса прошла; установка, повторная установка и аварийное восстановление после неудачного обновления ещё не прошли интеграционную приёмку. Он не изменяет маршруты, nftables, DNS, модули ядра или конфигурацию AmneziaWG.
+Поддерживаются Ubuntu Server с systemd на `amd64` и `arm64`. Release уже содержит gateway, Xray, unit-файл и installer; Go, Node.js, npm и unzip на сервере не требуются. Установка не меняет маршруты, nftables, DNS или сетевые интерфейсы.
 
-## Подготовка
+## Установка одной командой
 
-Соберите или получите локальный release-бинарник `ubuntu-vpn-gateway-linux-amd64` либо `arm64`. Проект пока не публикует release URL, поэтому installer намеренно не скачивает gateway из вымышленного источника.
-
-Для Xray укажите существующий тег официального Xray-core и SHA-256 конкретного архива для архитектуры сервера. Контрольную сумму следует получить по доверенному каналу и сверить с официальной публикацией release. Installer загружает архив только с `https://github.com/XTLS/Xray-core/releases/download/…`, проверяет SHA-256 до распаковки и запускает `xray version` до установки.
-
-На сервере нужны `curl`, `unzip`, `sha256sum` и systemd.
-
-## Установка
+Перед выполнением просмотрите публичный `bootstrap.sh`. Для latest release:
 
 ```bash
-sudo ./scripts/install.sh \
-  --gateway-binary ./ubuntu-vpn-gateway-linux-amd64 \
-  --xray-version vX.Y.Z \
-  --xray-sha256 64_HEX_СИМВОЛА
+curl -fsSL https://raw.githubusercontent.com/zirocool93/service-vless/main/scripts/bootstrap.sh | sudo bash
 ```
 
-При первой установке команда `gateway init` выполняется непосредственно в терминале до запуска systemd. Сгенерированный пароль администратора появляется только в stdout installer и не попадает в journald. Сохраните его сразу: повторная инициализация пароль не показывает и не меняет.
+Для закреплённой версии:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zirocool93/service-vless/main/scripts/bootstrap.sh | sudo bash -s -- --version v0.1.0
+```
+
+Bootstrap обращается только к HTTPS GitHub API и GitHub Releases, выбирает asset `ubuntu-vpn-gateway_<tag>_linux_<arch>.tar.gz`, требует единственную точную запись asset в `SHA256SUMS`, проверяет SHA-256 и безопасные пути архива. Ссылки, device nodes и другие специальные файлы отклоняются. После проверки вызывается вложенный installer.
+
+Для самой первой команды на минимальном образе нужны `curl`, CA certificates, `tar`, `sha256sum` и `awk`. Installer на Ubuntu ставит отсутствующие `curl`, `ca-certificates` и `util-linux` через apt. Production runtime не загружает Xray отдельно: проверенный бинарник находится внутри release bundle.
+
+## Результат
 
 Устанавливаются:
 
-- `/usr/local/bin/ubuntu-vpn-gateway`;
-- `/usr/local/lib/ubuntu-vpn-gateway/xray`;
-- `/etc/systemd/system/ubuntu-vpn-gateway.service`;
-- данные в `/var/lib/ubuntu-vpn-gateway` с режимом `0700`;
-- master key и TLS-пара в `/etc/ubuntu-vpn-gateway/secrets` с каталогом `0700` и файлами `0600`.
+- gateway: `/usr/local/bin/ubuntu-vpn-gateway`;
+- Xray: `/usr/local/lib/ubuntu-vpn-gateway/xray`;
+- updater: `/usr/local/bin/ubuntu-vpn-gateway-update`;
+- unit: `/etc/systemd/system/ubuntu-vpn-gateway.service`;
+- SQLite и журнал версии: `/var/lib/ubuntu-vpn-gateway`;
+- master key и TLS: `/etc/ubuntu-vpn-gateway/secrets`;
+- лицензии и документация: `/usr/share/doc/ubuntu-vpn-gateway`.
 
-После старта интерфейс доступен на `https://SERVER-IP:8443`. Сертификат self-signed, поэтому при первом подключении проверьте его fingerprint через доверенный SSH-сеанс. Локальные SOCKS5 и HTTP proxy слушают только loopback.
+Каталоги данных и секретов имеют режим `0700`, секретные файлы — `0600`. При первой инициализации имя администратора и случайный пароль выводятся только в stdout текущего installer. Сохраните пароль сразу. Повторная установка не печатает и не меняет существующие credentials.
 
-## Обновление и повторный запуск
-
-`scripts/update.sh` принимает те же параметры и вызывает idempotent installer. Перед заменой существующих бинарников создаётся каталог `/var/lib/ubuntu-vpn-gateway/backups/UTC_TIMESTAMP` с предыдущими бинарниками, SQLite и каталогом секретов. Служба останавливается до копирования и запускается после атомарной замены файлов. Существующая учётная запись администратора сохраняется; `init` повторно не вызывается.
-
-Перед обновлением убедитесь, что на файловой системе достаточно места для полной копии SQLite и секретов. Резервная копия SQLite пригодна только вместе с соответствующим `master.key`.
-
-## Проверка
+После запуска installer проверяет unit и HTTPS endpoint с `/etc/ubuntu-vpn-gateway/secrets/tls.crt`:
 
 ```bash
 sudo systemctl status ubuntu-vpn-gateway.service
-curl --cacert /etc/ubuntu-vpn-gateway/secrets/tls.crt https://SERVER-IP:8443/api/v1/health
-sudo journalctl -u ubuntu-vpn-gateway.service
+curl --cacert /etc/ubuntu-vpn-gateway/secrets/tls.crt https://localhost:8443/api/v1/health
 ```
 
-Пароль администратора, VLESS URI, subscription URL, UUID, ключи и полные конфигурации не должны передаваться в команды журналирования или публиковаться в диагностике.
+Панель доступна по `https://SERVER-IP:8443`. При доступе с другого компьютера сверяйте fingerprint self-signed сертификата через доверенный канал.
+
+## Обновление
+
+До latest release:
+
+```bash
+sudo ubuntu-vpn-gateway-update
+```
+
+До конкретной версии:
+
+```bash
+sudo ubuntu-vpn-gateway-update --version v0.1.0
+```
+
+Одновременно может выполняться только один install/update. До остановки службы проверяются версии бинарников нового bundle. После остановки создаётся уникальная резервная копия прежних бинарников, SQLite вместе с WAL/SHM, секретов, unit-файла, installer/updater и manifest версии. Файлы заменяются через временное имя и atomic rename.
+
+Новая версия должна запуститься и пройти HTTPS health check. При ошибке, отмене команды или сбое миграции ERR trap останавливает новый процесс, восстанавливает предыдущие бинарники, БД, sidecar-файлы, ключи, unit и updater, затем запускает прежнюю службу. Обновление никогда не очищает каталоги данных. Первичная неудачная установка также сохраняет созданные БД/ключи для безопасного повторного запуска.
+
+Перезапуск службы во время update завершает текущее активное локальное proxy-соединение. После успешного обновления откройте панель и нажмите «Подключить» для нужного узла снова; автоматическое восстановление runtime-соединения пока не реализовано.
+
+Резервные копии находятся в `/var/lib/ubuntu-vpn-gateway/backups`. Они содержат секреты и доступны только root. Автоматическое удаление backups не выполняется.
+
+## Формат release bundle
+
+Архив для каждой архитектуры содержит обычные файлы:
+
+```text
+ubuntu-vpn-gateway
+xray
+VERSION
+LICENSE
+scripts/bootstrap.sh
+scripts/install.sh
+scripts/update.sh
+scripts/uninstall.sh
+packaging/systemd/ubuntu-vpn-gateway.service
+docs/installation.md
+third-party/Xray-LICENSE
+third-party/Xray-SOURCE.md
+```
+
+`VERSION` и команда `ubuntu-vpn-gateway version` обязаны точно совпадать с release tag вида `vX.Y.Z`. `Xray-SOURCE.md` фиксирует официальный tag и исходный URL Xray, соответствующий бинарнику под MPL-2.0.
 
 ## Удаление
 
 ```bash
-sudo ./scripts/uninstall.sh
+sudo /usr/local/lib/ubuntu-vpn-gateway/uninstall.sh
 ```
 
-По умолчанию удаляются служба и бинарники, а данные и секреты сохраняются для повторной установки. Полное удаление выполняется только явной командой:
+По умолчанию бинарники и unit удаляются, а SQLite, секреты и backups сохраняются. Необратимое удаление данных выполняется только явным `--purge-data`; перед ним создайте внешнюю резервную копию SQLite и `master.key`.
 
-```bash
-sudo ./scripts/uninstall.sh --purge-data
-```
+## Ограничения
 
-`--purge-data` необратимо удаляет SQLite, резервные копии, master key и TLS-ключи.
-
-## Ограничение AmneziaWG
-
-Installer не устанавливает и не загружает модули ядра AmneziaWG. На предоставленном LXC нет AWG-модуля и TUN, поэтому AWG runtime здесь не проверен. VLESS Full Tunnel через TPROXY не требует TUN: его применимость зависит от capabilities и сетевого review; изолированная проверка синтаксиса TPROXY уже прошла. Системное туннелирование требует независимого rollback watchdog и испытаний сохранности SSH и web-доступа.
+Installer не устанавливает AmneziaWG и не активирует Full Tunnel. Проверка TPROXY в namespace тестового LXC не является разрешением менять сеть. Такие изменения требуют отдельного одобренного дизайна, независимого watchdog и VM-проверки отката.

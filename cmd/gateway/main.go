@@ -22,13 +22,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/auth"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/config"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/database"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/events"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/httpapi"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/services"
+	"github.com/zirocool93/service-vless/internal/auth"
+	"github.com/zirocool93/service-vless/internal/config"
+	"github.com/zirocool93/service-vless/internal/database"
+	"github.com/zirocool93/service-vless/internal/events"
+	"github.com/zirocool93/service-vless/internal/httpapi"
+	"github.com/zirocool93/service-vless/internal/services"
 )
+
+// version задаётся при сборке релиза через -ldflags.
+var version = "dev"
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
@@ -38,8 +41,12 @@ func main() {
 }
 
 func run(args []string) error {
+	if len(args) == 1 && (args[0] == "version" || args[0] == "--version") {
+		fmt.Fprintln(os.Stdout, version)
+		return nil
+	}
 	if len(args) == 0 || (args[0] != "init" && args[0] != "serve") {
-		return errors.New("использование: gateway <init|serve> [параметры]")
+		return errors.New("использование: gateway <init|serve|version> [параметры]")
 	}
 	cfg, err := parseConfig(args[0], args[1:])
 	if err != nil {

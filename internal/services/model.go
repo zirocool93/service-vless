@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"errors"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/provider"
+	"github.com/zirocool93/service-vless/internal/provider"
 )
 
 type Node struct {

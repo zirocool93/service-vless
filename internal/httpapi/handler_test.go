@@ -9,7 +9,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/web"
+	"github.com/zirocool93/service-vless/web"
 )
 
 func TestNewServesEmbeddedFrontendAndAsset(t *testing.T) {

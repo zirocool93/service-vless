@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/proxy/xray"
+	"github.com/zirocool93/service-vless/internal/proxy/xray"
 	"io"
 	"net"
 	"net/http"

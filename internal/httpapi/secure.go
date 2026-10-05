@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/auth"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/events"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/internal/provider"
-	"github.com/ubuntu-vpn-gateway/ubuntu-vpn-gateway/web"
+	"github.com/zirocool93/service-vless/internal/auth"
+	"github.com/zirocool93/service-vless/internal/events"
+	"github.com/zirocool93/service-vless/internal/provider"
+	"github.com/zirocool93/service-vless/web"
 )
 
 type Options struct {

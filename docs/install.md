@@ -1,5 +1,5 @@
-# Установка и запуск
+# Установка
 
-Подготовлены скрипты install/update/uninstall и unit systemd для локального release-бинарника. Они ещё требуют интеграционной приёмки; инструкции и ограничения находятся в [installation.md](installation.md). Никаких маршрутов, nftables или DNS скрипты текущей версии не меняют.
+Публичная установка и обновление описаны в [installation.md](installation.md). Release содержит готовые Linux-бинарники gateway и Xray; Go, Node.js и unzip на production-сервере не нужны.
 
-Для сборки нужны Go 1.26+ (CI проверяет 1.26/1.27), Node.js/npm и GNU Make. После `make build` сначала создайте администратора командой `gateway init` с нужными каталогами данных и секретов, затем запустите `gateway serve` с теми же каталогами. Production-запуск использует HTTPS на :8443. Локальный HTTP допускается только с `--dev-http --listen 127.0.0.1:8443`. Xray задаётся абсолютным путём через `--xray-bin`. Пример локального запуска находится в [development.md](development.md).
+Installer не изменяет маршруты, nftables, DNS, интерфейсы или модули ядра. Full Tunnel остаётся отдельной высокорисковой фазой.

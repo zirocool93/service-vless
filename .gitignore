@@ -8,3 +8,10 @@
 *.exe
 *.test
 /.ssh/
+*.ppk
+*.key
+*.sqlite
+*.sqlite-*
+.env
+.env.*
+!.env.example
