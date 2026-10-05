@@ -1,0 +1,37 @@
+name: Проверка Phase 0
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.26.x', '1.27.x']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Установить зависимости интерфейса
+        run: npm ci
+        working-directory: web
+      - name: Проверить интерфейс
+        run: npm run lint && npm run typecheck && npm run build
+        working-directory: web
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Проверить форматирование Go
+        run: test -z "$(gofmt -l cmd internal web/embed.go)"
+      - name: Проверить Go
+        run: go vet ./cmd/... ./internal/... ./web && go test ./cmd/... ./internal/... ./web
+      - name: Проверить гонки Go
+        run: go test -race ./cmd/... ./internal/... ./web
+      - name: Собрать бинарник Linux
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/gateway-linux-amd64 ./cmd/gateway
