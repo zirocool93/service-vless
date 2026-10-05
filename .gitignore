@@ -1,0 +1,9 @@
+/web/dist/
+/web/node_modules/
+*.tsbuildinfo
+/bin/
+/coverage.out
+/coverage.html
+/.tools/
+*.exe
+*.test
