@@ -62,6 +62,8 @@ func (s *Service) serve(w http.ResponseWriter, r *http.Request) {
 		respond(w, n, e, 201)
 	case p == "/api/v1/connections/status" && r.Method == "GET":
 		respond(w, s.Detail(), nil, 200)
+	case strings.HasPrefix(p, "/api/v1/tunnel/"):
+		s.tunnelAction(w, r, p)
 	case p == "/api/v1/connections/disconnect" && r.Method == "POST":
 		e := s.Disconnect(r.Context())
 		respond(w, s.Detail(), e, 200)

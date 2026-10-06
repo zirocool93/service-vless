@@ -105,3 +105,87 @@ func TestLoginRejectsCrossOriginAndOversizedPassword(t *testing.T) {
 		}
 	}
 }
+
+func TestTunnelRoutesRequireAuthenticationAndCSRF(t *testing.T) {
+	dir := t.TempDir()
+	db, err := database.OpenWithSecrets(dir, dir+"/keys")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	authService := auth.New(db)
+	password, err := authService.Bootstrap(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	calls := 0
+	var seenRemote, seenForwarded string
+	service := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		seenRemote = r.RemoteAddr
+		seenForwarded = r.Header.Get("X-Forwarded-For")
+		writeAny(w, http.StatusOK, map[string]string{"status": "reached"})
+	})
+	h := NewWithOptions(Options{Auth: authService, Service: service, DevHTTP: true})
+
+	unauthorized := httptest.NewRecorder()
+	h.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodPost, "http://localhost/api/v1/tunnel/apply", strings.NewReader(`{}`)))
+	if unauthorized.Code != http.StatusUnauthorized || calls != 0 {
+		t.Fatalf("неавторизованный tunnel: code=%d calls=%d", unauthorized.Code, calls)
+	}
+
+	loginBody, _ := json.Marshal(map[string]string{"username": "admin", "password": password})
+	loginRequest := httptest.NewRequest(http.MethodPost, "http://localhost/api/v1/auth/login", bytes.NewReader(loginBody))
+	loginRequest.Header.Set("Content-Type", "application/json")
+	loginRequest.RemoteAddr = "203.0.113.7:4321"
+	login := httptest.NewRecorder()
+	h.ServeHTTP(login, loginRequest)
+	if login.Code != http.StatusOK {
+		t.Fatalf("login=%d %s", login.Code, login.Body.String())
+	}
+	var session sessionResponse
+	if err := json.Unmarshal(login.Body.Bytes(), &session); err != nil {
+		t.Fatal(err)
+	}
+	var cookie *http.Cookie
+	for _, candidate := range login.Result().Cookies() {
+		if candidate.Name == auth.CookieName {
+			cookie = candidate
+		}
+	}
+	if cookie == nil {
+		t.Fatal("session cookie отсутствует")
+	}
+
+	withoutCSRF := httptest.NewRequest(http.MethodPost, "http://localhost/api/v1/tunnel/apply", strings.NewReader(`{}`))
+	withoutCSRF.AddCookie(cookie)
+	denied := httptest.NewRecorder()
+	h.ServeHTTP(denied, withoutCSRF)
+	if denied.Code != http.StatusForbidden || calls != 0 {
+		t.Fatalf("tunnel без CSRF: code=%d calls=%d", denied.Code, calls)
+	}
+
+	valid := httptest.NewRequest(http.MethodPost, "http://localhost/api/v1/tunnel/apply", strings.NewReader(`{}`))
+	valid.RemoteAddr = "203.0.113.7:9876"
+	valid.Header.Set("X-Forwarded-For", "198.51.100.99")
+	valid.Header.Set("X-CSRF-Token", session.CSRFToken)
+	valid.AddCookie(cookie)
+	allowed := httptest.NewRecorder()
+	h.ServeHTTP(allowed, valid)
+	if allowed.Code != http.StatusOK || calls != 1 {
+		t.Fatalf("валидный tunnel: code=%d calls=%d", allowed.Code, calls)
+	}
+	if seenRemote != "203.0.113.7:9876" || seenForwarded != "198.51.100.99" {
+		t.Fatalf("middleware изменил peer: RemoteAddr=%q XFF=%q", seenRemote, seenForwarded)
+	}
+}
+
+func TestTunnelStatusRequiresAuthentication(t *testing.T) {
+	h, _, _ := secureFixture(t)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "http://localhost/api/v1/tunnel/status", nil))
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("status без auth=%d", w.Code)
+	}
+}

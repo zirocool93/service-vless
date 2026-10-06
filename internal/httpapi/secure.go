@@ -113,6 +113,7 @@ func NewWithOptions(o Options) http.Handler {
 		mux.Handle("/api/v1/connections/", o.Service)
 		mux.Handle("/api/v1/subscriptions", o.Service)
 		mux.Handle("/api/v1/subscriptions/", o.Service)
+		mux.Handle("/api/v1/tunnel/", o.Service)
 	}
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		writeAny(w, 404, response{Message: "API-маршрут не найден"})

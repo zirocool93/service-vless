@@ -44,7 +44,7 @@ done
 [[ $REPOSITORY =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo "Некорректное имя репозитория." >&2; exit 1; }
 BUNDLE_DIR=$(cd -- "${BUNDLE_DIR:?Не указан --bundle-dir}" && pwd -P)
 
-required=(ubuntu-vpn-gateway xray scripts/bootstrap.sh scripts/install.sh scripts/update.sh scripts/uninstall.sh packaging/systemd/ubuntu-vpn-gateway.service docs/installation.md LICENSE VERSION third-party/Xray-LICENSE third-party/Xray-SOURCE.md)
+required=(ubuntu-vpn-gateway xray uvg-watchdog scripts/bootstrap.sh scripts/install.sh scripts/update.sh scripts/uninstall.sh packaging/systemd/ubuntu-vpn-gateway.service packaging/systemd/uvg-watchdog@.service packaging/systemd/uvg-network-recovery.service docs/installation.md LICENSE VERSION third-party/Xray-LICENSE third-party/Xray-SOURCE.md)
 for item in "${required[@]}"; do
   [[ -f "$BUNDLE_DIR/$item" && ! -L "$BUNDLE_DIR/$item" ]] || { echo "Bundle повреждён: отсутствует $item." >&2; exit 1; }
 done
@@ -62,6 +62,8 @@ command -v apt-get >/dev/null || { echo "apt-get не найден." >&2; exit 1
 missing=()
 command -v curl >/dev/null || missing+=(curl)
 command -v flock >/dev/null || missing+=(util-linux)
+command -v nft >/dev/null || missing+=(nftables)
+command -v ip >/dev/null || missing+=(iproute2)
 [[ -r /etc/ssl/certs/ca-certificates.crt ]] || missing+=(ca-certificates)
 if ((${#missing[@]})); then
   DEBIAN_FRONTEND=noninteractive apt-get update -qq
@@ -71,6 +73,7 @@ command -v systemctl >/dev/null || { echo "systemd не найден." >&2; exit
 command -v curl >/dev/null || { echo "curl не установлен." >&2; exit 1; }
 
 "$BUNDLE_DIR/ubuntu-vpn-gateway" version | grep -Fx -- "$RELEASE_VERSION" >/dev/null || { echo "Версия gateway внутри bundle не совпадает." >&2; exit 1; }
+"$BUNDLE_DIR/uvg-watchdog" version | grep -Fx -- "$RELEASE_VERSION" >/dev/null || { echo "Версия watchdog внутри bundle не совпадает." >&2; exit 1; }
 "$BUNDLE_DIR/xray" version >/dev/null || { echo "Бинарник Xray внутри bundle не запускается." >&2; exit 1; }
 
 [[ -d $APP_ROOT ]] && HAD_APP_ROOT=true
@@ -123,6 +126,11 @@ rollback() {
         rm -f -- /usr/local/bin/ubuntu-vpn-gateway-update || failures+=("не удалён новый updater")
       fi
       if ! $HAD_UNIT; then rm -f -- "$UNIT_PATH" || failures+=("не удалён новый unit"); fi
+      for unit in uvg-watchdog@.service uvg-network-recovery.service; do
+        if [[ -f $BACKUP_DIR/$unit ]]; then install -m 0644 "$BACKUP_DIR/$unit" "/etc/systemd/system/$unit" || failures+=("не восстановлен $unit")
+        else rm -f -- "/etc/systemd/system/$unit"; fi
+      done
+      systemctl stop uvg-network-recovery.service >/dev/null 2>&1 || true
       systemctl daemon-reload || failures+=("daemon-reload завершился ошибкой")
       if $ENABLED_BEFORE; then systemctl enable "$SERVICE" >/dev/null 2>&1 || failures+=("не восстановлен enabled-state"); else systemctl disable "$SERVICE" >/dev/null 2>&1 || failures+=("не восстановлен disabled-state"); fi
       if $ACTIVE_BEFORE; then systemctl start "$SERVICE" || failures+=("прежняя служба не запустилась"); fi
@@ -131,6 +139,8 @@ rollback() {
     elif $MUTATED && ! $HAD_INSTALL; then
       systemctl disable "$SERVICE" >/dev/null 2>&1 || true
       rm -f -- "$UNIT_PATH" "$UNIT_PATH.new" "$APP_BIN" "$APP_BIN.new" /usr/local/bin/ubuntu-vpn-gateway-update /usr/local/bin/ubuntu-vpn-gateway-update.new || failures+=("не удалены файлы неудачной первичной установки")
+      systemctl stop uvg-network-recovery.service >/dev/null 2>&1 || true
+      rm -f -- /etc/systemd/system/uvg-watchdog@.service /etc/systemd/system/uvg-network-recovery.service
       rm -rf -- "$APP_ROOT" /usr/share/doc/ubuntu-vpn-gateway || failures+=("не удалены каталоги неудачной первичной установки")
       systemctl daemon-reload || failures+=("daemon-reload после очистки завершился ошибкой")
       echo "Созданные данные и secrets сохранены для безопасного повторного запуска." >&2
@@ -150,6 +160,8 @@ trap 'rollback 143' TERM
 
 if [[ -f $APP_BIN ]]; then
   HAD_INSTALL=true
+  # До замены helper и остановки backend необходимо снять Full Tunnel.
+  if [[ -x $APP_ROOT/uvg-watchdog ]]; then "$APP_ROOT/uvg-watchdog" recover; fi
   install -d -m 0700 "$DATA_DIR/backups"
   BACKUP_DIR=$(mktemp -d "$DATA_DIR/backups/$(date -u +%Y%m%dT%H%M%SZ)-${RELEASE_VERSION}.XXXXXXXX")
   if systemctl is-enabled --quiet "$SERVICE"; then ENABLED_BEFORE=true; fi
@@ -159,6 +171,10 @@ if [[ -f $APP_BIN ]]; then
     systemctl stop "$SERVICE"
   fi
   cp -a -- "$APP_BIN" "$BACKUP_DIR/ubuntu-vpn-gateway"
+  for unit in uvg-watchdog@.service uvg-network-recovery.service; do
+    [[ ! -f /etc/systemd/system/$unit ]] || cp -a -- "/etc/systemd/system/$unit" "$BACKUP_DIR/$unit"
+  done
+  systemctl stop uvg-network-recovery.service >/dev/null 2>&1 || true
   [[ -f $XRAY_BIN ]] && cp -a -- "$XRAY_BIN" "$BACKUP_DIR/xray"
   [[ -f $UNIT_PATH ]] && cp -a -- "$UNIT_PATH" "$BACKUP_DIR/ubuntu-vpn-gateway.service"
   for db_file in gateway.sqlite gateway.sqlite-wal gateway.sqlite-shm; do
@@ -180,6 +196,12 @@ install -m 0755 "$BUNDLE_DIR/ubuntu-vpn-gateway" "$APP_BIN.new"
 mv -f -- "$APP_BIN.new" "$APP_BIN"
 install -m 0755 "$BUNDLE_DIR/xray" "$XRAY_BIN.new"
 mv -f -- "$XRAY_BIN.new" "$XRAY_BIN"
+install -m 0755 "$BUNDLE_DIR/uvg-watchdog" "$APP_ROOT/uvg-watchdog.new"
+mv -f -- "$APP_ROOT/uvg-watchdog.new" "$APP_ROOT/uvg-watchdog"
+for unit in uvg-watchdog@.service uvg-network-recovery.service; do
+  install -m 0644 "$BUNDLE_DIR/packaging/systemd/$unit" "/etc/systemd/system/$unit.new"
+  mv -f -- "/etc/systemd/system/$unit.new" "/etc/systemd/system/$unit"
+done
 install -m 0644 "$BUNDLE_DIR/packaging/systemd/ubuntu-vpn-gateway.service" "$UNIT_PATH.new"
 mv -f -- "$UNIT_PATH.new" "$UNIT_PATH"
 install -m 0644 "$BUNDLE_DIR/docs/installation.md" /usr/share/doc/ubuntu-vpn-gateway/installation.md

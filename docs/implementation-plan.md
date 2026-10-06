@@ -1,10 +1,10 @@
 # План реализации
 
-План следует ТЗ Ubuntu VPN Gateway. Реализованы bootstrap, Core Web, импорт VLESS/подписок и локальное проксирование Xray. Дальнейшая работа: установщик, доработка подписок, безопасное системное туннелирование и совместимость AWG. Завершение отдельных компонентов не означает production-ready приёмку всего ТЗ.
+План следует ТЗ Ubuntu VPN Gateway. Реализованы Core Web, импорт VLESS/подписок, локальное проксирование Xray, host Full Tunnel IPv4 TCP/UDP и Ubuntu install/update/recovery. Docker/AWG runtime/kill switch/IPv6 tunnel и failover остаются backlog. Публичный GitHub release/update ещё не опубликован и не проверен; это не равнозначно выпуску продукта.
 
 ## Текущее сравнение
 
-Изначально рабочий каталог был пуст; Git и документы инициализированы в корне проекта. Сейчас есть Go API, HTTPS/auth, SQLite с миграцией и шифрованием секретов, рабочий React UI, VLESS-парсер, подписки и процесс Xray. На Ubuntu проверено изменение выходного IP через SOCKS5 и HTTP proxy. Системная сеть не изменялась. Полная сетевая приёмка и AWG ещё впереди. Новые документы [Core Web](core-web.md), [UI](ui.md) и [тестовая среда](test-environment.md) отражают фактическую реализацию; исходная архитектура остаётся целевым проектом.
+В проекте есть Go API, HTTPS/auth, SQLite с шифрованием секретов, VLESS-парсер/подписки и Xray. Host Full Tunnel использует отдельный network-watchdog и recovery units. Namespace/Ubuntu LXC результаты, включая fault harness 10/10, повторный lease expiry, reboot с активным туннелем и installer update из active состояния, перечислены в [тестовой среде](test-environment.md). Публичный GitHub release/update остаётся непроверенным. Архитектурный target и оставшийся backlog сохранены ниже.
 
 ## Зависимости фаз
 
@@ -22,7 +22,7 @@ Phase 5 зависит от стабильных провайдеров Phase 3/
 
 ## Проверяемые этапы
 
-### Phase 0 — Bootstrap (сейчас)
+### Phase 0 — Bootstrap (завершена; исторические критерии)
 
 **Сделать:** Go module и HTTP-сервер; React + TypeScript skeleton; воспроизводимая сборка frontend; встраивание `web/dist` через `embed`; `GET /api/v1/health` и демонстрационный `GET /api/v1/status`; интерфейс `Provider`, тип состояния и валидация enum без сетевых эффектов; локальная команда запуска.
 
@@ -46,7 +46,7 @@ URI parser; plain/Base64 subscription parser; несколько подписо�
 
 Обнаружение/версионирование Xray; безопасная генерация и проверка конфига; lifecycle; локальные SOCKS5 `127.0.0.1:1080` и HTTP `127.0.0.1:8080`; connect/disconnect/test, latency, endpoint/Internet checks и exit IP. Конфигурация создаётся как данные, не как пользовательская shell-команда.
 
-**Приёмка:** SOCKS и HTTP доступны только на localhost по умолчанию; запрос через прокси подтверждает смену exit IP; остановленный, недоступный endpoint и нерабочий выход различаются. Full Tunnel пока выключен.
+**Приёмка исходного этапа:** SOCKS и HTTP доступны только на localhost по умолчанию; запрос через прокси подтверждает смену exit IP; остановленный, недоступный endpoint и нерабочий выход различаются. Host Full Tunnel реализован отдельно и описан в Phase 5–6 ниже.
 
 ### Phase 4 — AmneziaWG client
 
@@ -54,17 +54,17 @@ URI parser; plain/Base64 subscription parser; несколько подписо�
 
 **Приёмка:** тесты парсера и некорректных конфигов; проверка соединения и трафика на Ubuntu VM с совместимым модулем; несовместимость сообщает безопасную ошибку. Конфиг AWG может содержать default-route AllowedIPs: такое подключение выполняется через Safe Apply/watchdog как минимум для маршрутов, даже если Full Tunnel UI ещё не включён.
 
-### Phase 5 — Full Tunnel (высокий риск)
+### Phase 5 — Host Full Tunnel (IPv4 TCP/UDP реализован; backlog остаётся)
 
-Сначала подготовить и проверить `docs/networking-design.md`; до реализации ревью packet flow, fwmark/table/chains, прямого маршрута VPN endpoint, LAN/SSH/UI exclusions, DNS, конфликтов и recovery. Затем nftables/TPROXY или обоснованный механизм, fail-open default и настраиваемый kill switch; изолированные identifiers; anti-lockout.
+Исходный target требует review `docs/networking-design.md`, packet flow, fwmark/table/chains, маршрута VPN endpoint, LAN/SSH/UI exclusions, DNS и recovery; kill switch и anti-lockout остаются отдельными требованиями, не входящими в текущую реализацию.
 
-**Приёмка:** только после design review; тесты в Linux namespaces и Ubuntu VM; при переключении SSH/UI, LAN и доступ к VPN endpoint сохраняются; внешний IP сервера меняется; сторонние firewall tables сохраняются.
+**Текущее состояние:** host Full Tunnel для VLESS IPv4 TCP/UDP реализован. Candidate прошёл namespace и Ubuntu LXC сценарии, описанные в `test-environment.md`. Docker routing, AWG runtime, kill switch и IPv6 tunnel не реализованы. Ни эти ограничения, ни локальные проверки не означают завершение всего исходного Phase 5 target.
 
-### Phase 6 — Safe Apply / watchdog
+### Phase 6 — Safe Apply / watchdog (реализовано для host Full Tunnel)
 
-Validate → snapshot routes/firewall/DNS с надёжным сохранением на диске → независимый rollback watchdog armed и подтверждён с этим snapshot → первая мутация и временное применение → end-to-end VPN/Internet/management проверки → commit или восстановление. Порядок закрывает окно отказа между мутацией и созданием watchdog. Watchdog запускается независимо (например, systemd transient unit), а не goroutine основного процесса. Все проверки учитывают IPv4 и IPv6: корректный туннель либо явная блокировка IPv6, без утечки в обход.
+Validate → durable snapshot → независимый rollback watchdog armed ACK → первая мутация → management/traffic checks → commit или восстановление. Порядок закрывает окно отказа между мутацией и watchdog. В реализации watchdog — отдельный systemd unit, не goroutine backend. Внешний IPv6 для текущего IPv4-only туннеля блокируется.
 
-**Приёмка:** искусственно внести неработающий маршрут, прекратить подтверждение backend, доказать автоматическое восстановление и доступность SSH; повторить при падении/перезапуске backend. Без успешного rollback Full Tunnel не готов.
+**Текущее состояние:** staged apply и watchdog rollback прошли VM проверки, включая гибель активных компонентов, lease expiry, backend restart, reboot и update при active tunnel. `tproxy_fault_namespace.py` прошёл 10/10 отказов owner/Xray на стадиях armed, tracking, sealing, sealed и pending; оба namespace harness входят в CI/release gate.
 
 ### Phase 7 — Failover
 
@@ -108,6 +108,6 @@ Windows не предоставляет целевые systemd, nftables, Linux 
 
 Архитектурное решение сначала отражается в `docs/architecture.md`, порядок/критерии — здесь, карта состояния — в `docs/repository-map.md`, фактические действия/результаты и незавершённое — в `docs/work-log.md`. При каждом этапе обновлять журнал, а актуальные риски/решения — профильный документ. Каждый этап закрывается его критериями и результатом проверки до начала зависимых фаз.
 
-## Фактический статус на 2026-10-05
+## Фактический статус на 2026-10-06
 
-Phase 0 завершена: сборка Go/React, встраивание UI, health/status и unit-тесты прошли; подробности — в журнале работ. Provider пока интерфейс и enum, автомат переходов входит в реализацию управления соединениями. Phase 1–9 ещё не начаты. Полный MVP и production-развёртывание не приняты.
+Core Web, VLESS/Xray local proxy, host Full Tunnel IPv4 TCP/UDP и Ubuntu installer/recovery реализованы. VM acceptance staged apply, rollback, lease expiry, reboot с активным туннелем и installer update из active состояния прошли. Fault namespace harness прошёл 10/10, а оба namespace harness добавлены в CI/release gate. Полный исходный MVP не завершён: Docker, AWG runtime, kill switch, IPv6 tunnel и failover остаются backlog. Проверка публичного GitHub release/update ожидается.

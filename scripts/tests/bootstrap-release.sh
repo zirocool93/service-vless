@@ -10,13 +10,24 @@ trap cleanup EXIT
 BUNDLE="$TMP_DIR/bundle"
 mkdir -p "$BUNDLE/scripts" "$BUNDLE/packaging/systemd" "$BUNDLE/docs" "$BUNDLE/third-party"
 printf 'v0.1.0\n' > "$BUNDLE/VERSION"
-for file in ubuntu-vpn-gateway xray LICENSE packaging/systemd/ubuntu-vpn-gateway.service docs/installation.md third-party/Xray-LICENSE third-party/Xray-SOURCE.md; do
+for file in ubuntu-vpn-gateway xray uvg-watchdog LICENSE packaging/systemd/ubuntu-vpn-gateway.service packaging/systemd/uvg-watchdog@.service packaging/systemd/uvg-network-recovery.service docs/installation.md third-party/Xray-LICENSE third-party/Xray-SOURCE.md; do
   : > "$BUNDLE/$file"
 done
 cat > "$BUNDLE/scripts/install.sh" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
-printf '%s\n' "$*" > "${UVG_TEST_MARKER:?}"
+bundle=""
+args=("$@")
+while (($#)); do
+  case "$1" in
+    --bundle-dir) bundle=$2; shift 2 ;;
+    *) shift ;;
+  esac
+done
+for required in uvg-watchdog packaging/systemd/uvg-watchdog@.service packaging/systemd/uvg-network-recovery.service; do
+  [[ -f "$bundle/$required" ]] || { echo "В mock bundle отсутствует $required" >&2; exit 1; }
+done
+printf '%s\n' "${args[*]}" > "${UVG_TEST_MARKER:?}"
 EOF
 chmod 0755 "$BUNDLE/scripts/install.sh"
 for script in bootstrap.sh update.sh uninstall.sh; do : > "$BUNDLE/scripts/$script"; done

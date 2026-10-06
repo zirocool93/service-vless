@@ -37,5 +37,13 @@ jobs:
         run: go vet ./cmd/... ./internal/... ./web && go test ./cmd/... ./internal/... ./web
       - name: Проверить гонки Go
         run: go test -race ./cmd/... ./internal/... ./web
+      - name: Проверить TPROXY и независимый rollback в network namespace
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends nftables iproute2
+          CGO_ENABLED=0 go build -o bin/uvg-watchdog-namespace ./cmd/network-watchdog
+          sudo chmod +x bin/uvg-watchdog-namespace
+          sudo unshare -n python3 scripts/tests/tproxy_namespace.py "$PWD/bin/uvg-watchdog-namespace"
+          sudo unshare -n python3 scripts/tests/tproxy_fault_namespace.py "$PWD/bin/uvg-watchdog-namespace"
       - name: Собрать бинарник Linux
         run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/gateway-linux-amd64 ./cmd/gateway

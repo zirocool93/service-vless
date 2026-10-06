@@ -12,6 +12,9 @@ export type Connection = {
   last_error?: string
 }
 export type ConnectionStatus = { state: string; message?: string; active_node_id?: string; exit_ip?: string }
+export type TunnelPlan = { transaction_id: string; hash: string; node_id: string; endpoint_ip: string; endpoint_port: number; management_peers: string[]; lan4: string[] | null; lan6: string[] | null; management_flow_policy?: string; dns: string; ipv6: string; deadline_seconds: number; ssh_port: number; ui_port: number }
+export type TunnelStatus = { available: boolean; state: string; message: string; transaction_id?: string; deadline?: string; plan?: TunnelPlan; checks: { tcp: boolean; dns_udp: boolean; dns_tcp: boolean; ipv6_blocked: boolean }; exit_ip?: string }
+export type PreparedTunnel = { plan: TunnelPlan; token: string }
 export type Subscription = { id: string; name: string; url: string; enabled: boolean; update_interval: number }
 
 export class ApiError extends Error {

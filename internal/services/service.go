@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/zirocool93/service-vless/internal/provider"
 	"github.com/zirocool93/service-vless/internal/proxy/xray"
+	"github.com/zirocool93/service-vless/internal/tunnel"
 	"io"
 	"net"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -50,7 +52,10 @@ type Service struct {
 	eventSink           func(string, string)
 	startProcess        startProcessFunc
 	probeProcess        probeProcessFunc
+	tunnel              *tunnel.Manager
 }
+
+func (s *Service) SetTunnel(manager *tunnel.Manager) { s.tunnel = manager }
 
 func New(store Store, executable string, socksPort, httpPort int, maxConcurrent ...int) *Service {
 	limit := 5
@@ -110,6 +115,12 @@ func (s *Service) set(state provider.State, msg string) {
 func (s *Service) Connect(ctx context.Context, id string) error {
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
+	if s.tunnel != nil {
+		state := s.tunnel.Status().State
+		if state == "armed" || state == "pending" || state == "active" {
+			return errors.New("Перед сменой узла отключите Full Tunnel")
+		}
+	}
 	n, e := s.store.GetNode(ctx, id)
 	if e != nil {
 		return e
@@ -338,6 +349,11 @@ func (s *Service) startTemporary(ctx context.Context, n xray.Node) (managedProce
 func (s *Service) Disconnect(ctx context.Context) error {
 	s.opMu.Lock()
 	defer s.opMu.Unlock()
+	if s.tunnel != nil {
+		if err := s.tunnel.Disable(); err != nil {
+			return err
+		}
+	}
 	s.mu.Lock()
 	p := s.proc
 	s.proc = nil
@@ -368,6 +384,12 @@ func (s *Service) start(ctx context.Context, n xray.Node, socks, httpPort int) (
 	b, e := xray.Config(n, socks, httpPort)
 	if e != nil {
 		return nil, e
+	}
+	if runtime.GOOS == "linux" && os.Geteuid() == 0 {
+		b, e = xray.WithBypass(b)
+		if e != nil {
+			return nil, e
+		}
 	}
 	for _, port := range []int{socks, httpPort} {
 		listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))

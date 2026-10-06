@@ -28,6 +28,7 @@ import (
 	"github.com/zirocool93/service-vless/internal/events"
 	"github.com/zirocool93/service-vless/internal/httpapi"
 	"github.com/zirocool93/service-vless/internal/services"
+	"github.com/zirocool93/service-vless/internal/tunnel"
 )
 
 // version задаётся при сборке релиза через -ldflags.
@@ -79,6 +80,7 @@ func run(args []string) error {
 	}
 	eventHub := events.New()
 	service := services.New(db, cfg.XrayBin, cfg.SocksPort, cfg.HTTPPort, cfg.MaxConcurrent)
+	service.SetTunnel(tunnel.New(filepath.Join(cfg.DataDir, "tunnel"), cfg.XrayBin))
 	service.SetEventSink(eventHub.Publish)
 	handler := httpapi.NewWithOptions(httpapi.Options{Auth: authService, Service: service.Handler(), Events: eventHub, DevHTTP: cfg.DevHTTP, Status: func() any { return service.Detail() }})
 	defer func() {

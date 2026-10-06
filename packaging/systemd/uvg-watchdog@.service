@@ -1,0 +1,18 @@
+[Unit]
+Description=Независимый откат Full Tunnel %i
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/lib/ubuntu-vpn-gateway/uvg-watchdog monitor %i
+ExecStopPost=/usr/local/lib/ubuntu-vpn-gateway/uvg-watchdog rollback %i
+Restart=no
+TimeoutStopSec=120s
+KillMode=control-group
+UMask=0077
+NoNewPrivileges=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ubuntu-vpn-gateway
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW

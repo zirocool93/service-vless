@@ -8,8 +8,11 @@ fi
 umask 077
 exec 9>/run/lock/ubuntu-vpn-gateway-install.lock
 flock -n 9 || { echo "Установка, обновление или удаление уже выполняется." >&2; exit 1; }
+if [[ -x /usr/local/lib/ubuntu-vpn-gateway/uvg-watchdog ]]; then /usr/local/lib/ubuntu-vpn-gateway/uvg-watchdog recover; fi
 systemctl disable --now ubuntu-vpn-gateway.service 2>/dev/null || true
+systemctl stop uvg-network-recovery.service 2>/dev/null || true
 rm -f -- /etc/systemd/system/ubuntu-vpn-gateway.service
+rm -f -- /etc/systemd/system/uvg-watchdog@.service /etc/systemd/system/uvg-network-recovery.service
 systemctl daemon-reload
 rm -f -- /usr/local/bin/ubuntu-vpn-gateway /usr/local/bin/ubuntu-vpn-gateway-update
 rm -rf -- /usr/local/lib/ubuntu-vpn-gateway /usr/share/doc/ubuntu-vpn-gateway

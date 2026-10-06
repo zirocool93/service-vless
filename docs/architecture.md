@@ -2,9 +2,9 @@
 
 ## Назначение и границы
 
-Приложение управляет исходящими соединениями самого Ubuntu Server через VLESS-клиент Xray или AmneziaWG client. Это не VPN-сервер и не система выдачи доступа пользователям. Веб-интерфейс и API обслуживает один Go-бинарник; React + TypeScript собирается в статические файлы, встраиваемые через `embed`. Node.js нужен только для разработки и сборки.
+Приложение управляет исходящими соединениями самого Ubuntu Server через VLESS-клиент Xray. Это не VPN-сервер и не система выдачи доступа пользователям. Веб-интерфейс и API обслуживает один Go-бинарник; React + TypeScript собирается в статические файлы, встраиваемые через `embed`. Node.js нужен только для разработки и сборки. Импорт AWG-конфигураций есть, AWG runtime и failover пока не реализованы.
 
-Документ задаёт целевой контракт. Phase 0 реализует только bootstrap, health/status endpoints, интерфейс провайдера, enum состояний с `Valid()` и конфигурацию запуска; автомата переходов пока нет. В Phase 0 нет VPN-подключения, сетевых изменений, аутентификации или production installer.
+Документ сохраняет целевые контракты и требования. Фактическое состояние компонентов приведено ниже: проект уже включает Core Web, VLESS/Xray, Full Tunnel и Ubuntu installer; ранние описания Phase 0 далее по тексту являются историческими целями, а не перечнем текущих возможностей.
 
 ## Слои и зависимости
 
@@ -19,7 +19,7 @@ React UI ── HTTP REST / SSE ── Go API ── application services
 
 API переводит HTTP-запросы в команды/запросы прикладного слоя. UI не знает команд провайдера и не формирует системные команды. Репозитории скрывают SQL и подключаются к сервисам через узкие интерфейсы. Сетевые привилегированные операции доступны только как заранее определённые функции контроллера; endpoint вида `/exec` запрещён.
 
-Фактические пакеты Phase 0: `cmd/gateway`, `internal/{config,httpapi,provider}` и `web/`. Позднее добавляются прикладные сервисы, repositories, `auth`, `proxy/xray`, `vpn/amneziawg`, `network`, `failover`, `diagnostics`, `events`, `installer`. Один процесс API не означает, что он должен навсегда работать с root: сетевые привилегии должны иметь отдельную границу, пригодную для последующего минимального helper.
+Основные фактические пакеты: `cmd/gateway`, `cmd/network-watchdog`, `internal/tunnel`, `internal/{config,httpapi,provider,proxy,store}`, `web/`, `scripts/` и `packaging/systemd/`. `uvg-watchdog` — отдельный бинарник для recovery/rollback, а не goroutine backend. Backend управляет VLESS/Xray и host Full Tunnel IPv4 TCP/UDP; Docker, AWG runtime, kill switch и IPv6 tunnel остаются вне реализованного объёма.
 
 ## HTTP контракт Phase 0
 
@@ -49,7 +49,7 @@ type Provider interface {
 
 Единый автомат: `Disconnected`, `Connecting`, `Connected`, `Testing`, `Switching`, `Disconnecting`, `Failed`, `RollingBack`. Переходы принадлежат connection service, а не UI или драйверу провайдера. Запросы `Connect`, `Disconnect`, `Switch`, изменение routing и failover сериализуются общей блокировкой/очередью операций; два изменения активного соединения одновременно невозможны. Невалидные переходы возвращают конфликт состояния. После перезапуска runtime сверяется с системой, SQLite не считается источником истины о живом туннеле.
 
-В Phase 0 stub-провайдера нет; `GET /api/v1/status` возвращает постоянное `Disconnected`. Health приложения не зависит от наличия VPN.
+Текущий runtime опрашивает реальные сервисы и durable journal. HTTP health приложения не является доказательством наличия туннеля; состояние Full Tunnel читается через tunnel API и восстанавливается из журнала при старте.
 
 ## SQLite: целевая схема Phase 1+
 
@@ -89,10 +89,10 @@ Phase 1 добавляет Argon2id, случайный первичный па�
 
 ## Ubuntu/Linux networking — отдельная высокорисковая граница
 
-До реализации routing не выполнять сетевых мутаций. AmneziaWG профиль может задавать AllowedIPs/default route, поэтому подключение AWG, меняющее default route, тоже обязано проходить Safe Apply. Для Full Tunnel решение описывается отдельным `docs/networking-design.md` до production-кода и отдельного review: packet flow IPv4 и IPv6, fwmark, nftables chains, таблицы маршрутизации, исключения endpoint/LAN/SSH/UI, DNS и rollback. Утечки IPv6 при IPv4-only туннеле исключаются явно: туннелировать IPv6 корректно либо блокировать его согласно режиму; молчаливый обход через физический интерфейс запрещён. Порядок: validate → snapshot с надёжным сохранением на диске → arm независимого watchdog с подтверждением → первая мутация → проверки VPN/Internet/management → commit/отмена watchdog. Watchdog получает сохранённый snapshot и должен быть подтверждён **до первой мутации**. Это закрывает окно падения между изменением маршрута и запуском таймера. Внешний watchdog не может зависеть только от backend. Все identifiers проекта уникальны; существующие правила не очищаются целиком.
+Реализованный host Full Tunnel описан в `docs/networking-design.md`. Safe Apply сохраняет транзакцию и получает durable armed ACK watchdog до первой сетевой мутации. Затем публикуются только conntrack hooks; backend отслеживает состояние, запечатывает разрешённые SSH/UI потоки по полному 4-tuple и получает независимый flow ACK до установки маршрутов и атомарного включения intercept. Стадии watchdog: `tracking → sealing → sealed → pending`; nft правила проекта точечные, внешнее состояние сохраняется. IPv4 TCP/UDP направляются через VLESS; внешние IPv6-пакеты блокируются. Поддержка AWG-профилей, которые меняют default route, ещё не реализована.
 
-Full Tunnel нельзя принимать по проверкам Windows. Требуются root-tagged интеграционные тесты в Linux namespaces и acceptance на чистых Ubuntu VM разных поддерживаемых выпусков. Проверяются SSH-доступ, откат при искусственном сбое и восстановление маршрутов. AmneziaWG совместимость зависит от Ubuntu/kernel и проверяется на целевой VM.
+Full Tunnel нельзя принимать по проверкам Windows или WSL. Linux namespace и Ubuntu LXC acceptance текущего кандидата прошли для описанных в `docs/test-environment.md` сценариев; WSL kernel в этой среде не поддерживает требуемый nft TPROXY. Публичный GitHub release/update ещё не опубликован и не проверен. AmneziaWG runtime и его совместимость с Ubuntu/kernel не проверялись.
 
 ## Размещение на сервере
 
-Целевые пути: бинарник `/usr/local/bin/ubuntu-vpn-gateway`, данные `/var/lib/ubuntu-vpn-gateway/`, конфигурация `/etc/ubuntu-vpn-gateway/`, секреты `/etc/ubuntu-vpn-gateway/secrets/`, журналы через journald. Это целевое состояние installer (Phase 8), не поведение Phase 0.
+Пути установки: backend `/usr/local/bin/ubuntu-vpn-gateway`, watchdog и Xray в `/usr/local/lib/ubuntu-vpn-gateway/`, состояние `/var/lib/ubuntu-vpn-gateway/`, конфигурация `/etc/ubuntu-vpn-gateway/`, журналы через journald. Systemd recovery unit выполняется до backend; `ExecStartPre` повторяет durable recovery перед каждым запуском backend.

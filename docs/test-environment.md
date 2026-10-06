@@ -1,6 +1,6 @@
 # Среда испытаний рабочей версии
 
-Дата: 2026-10-05. Пользователь предоставил тестовый Ubuntu на `10.5.2.70`, вход `root` по ключу PuTTY в локальном каталоге `.ssh`. Этот каталог исключён из Git; ключ, адрес подписки с токеном и содержимое подписки не публикуются в документации или журнале.
+Дата исходной подготовки стенда: 2026-10-05; последующие проверки — staged candidate, 2026-10-06. Пользователь предоставил тестовый Ubuntu на `10.5.2.70`, вход `root` по ключу PuTTY в локальном каталоге `.ssh`. Этот каталог исключён из Git; ключ, адрес подписки с токеном и содержимое подписки не публикуются в документации или журнале.
 
 Подключение выполнено через PuTTY Plink с закреплённым при первом подключении отпечатком сервера `SHA256:FE8p/vds2EXjWyr8uImn4VhAgz9rckkCqWoSZQCoYYw`. Независимое подтверждение отпечатка не выполнялось. Сервер: Ubuntu 24.04 LTS, LXC, ядро Proxmox `6.17.2-2-pve`; основной интерфейс `eth0`, шлюз `10.5.2.1`. SSH-клиент виден серверу как `10.9.1.9`; этот адрес необходимо сохранить в исключениях управления при испытаниях маршрутизации.
 
@@ -8,16 +8,28 @@
 
 Для испытаний подготовлен закрытый каталог `/opt/ubuntu-vpn-gateway-test`, установлены curl, ca-certificates, unzip и обновлён iproute2. Default route, DNS и существующий firewall не изменялись. Неисправная штатная служба `proxmox-regenerate-snakeoil.service` обнаружена до установки приложения и оставлена без изменения.
 
-Xray 26.3.27 загружен из официального GitHub release для Windows и Linux; оба архива проверены по SHA256 release assets. Бинарники находятся в исключённом из Git `.tools/xray/`. Предоставленная подписка успешно получена по HTTPS с обычной проверкой сертификата: HTTP 200, 1508 байт, три VLESS-узла — один XHTTP/REALITY и два RAW/REALITY/Vision. Секретные данные сохраняются только локально в исключённом каталоге `.ssh` и в дальнейшем должны попасть в зашифрованное хранилище приложения.
+При первоначальной подготовке Xray 26.3.27 загружен из официального GitHub release для Windows и Linux; оба архива проверены по SHA256 release assets. Бинарники находятся в исключённом из Git `.tools/xray/`. Предоставленная подписка получена по HTTPS с обычной проверкой сертификата: HTTP 200, 1508 байт, три VLESS-узла — один XHTTP/REALITY и два RAW/REALITY/Vision. Локальные исходные копии секретных данных остаются в исключённом каталоге `.ssh`; приложение хранит импортированные секреты в зашифрованном SQLite-хранилище.
 
 Источники совместимости: [релизы Ubuntu](https://ubuntu.com/project/docs/release-team/list-of-releases/), [официальный Xray](https://github.com/XTLS/Xray-core/releases), [AmneziaWG kernel module](https://github.com/amnezia-vpn/amneziawg-linux-kernel-module), [AmneziaWG tools](https://github.com/amnezia-vpn/amneziawg-tools/releases).
+
+## Host Full Tunnel staged candidate
+
+Namespace проверка `scripts/tests/tproxy_namespace.py` выполняет все сетевые мутации только после durable armed ACK watchdog. На Ubuntu Linux она подтвердила сохранение существующего management 4-tuple, подключение нового SSH/TCP flow между capture и publish, IPv4 TCP/UDP TPROXY, DNS-before-LAN, `SO_MARK` bypass, блокировку внешнего IPv6 и rollback. Запуск из Linux с root: `sudo unshare -n -- python3 scripts/tests/tproxy_namespace.py /absolute/path/to/uvg-watchdog`. Этот сценарий изолирует сетевые изменения в disposable network namespace.
+
+Отдельный `scripts/tests/tproxy_fault_namespace.py` упражняет десять сочетаний отказа owner/Xray на стадиях armed, tracking, sealing, sealed и pending. Запуск: `sudo unshare -n -- python3 scripts/tests/tproxy_fault_namespace.py /absolute/path/to/uvg-watchdog`. Ubuntu namespace прогон прошёл 10/10: каждый отказ привёл к `rolled_back`, очистке собственных nft/table 200 и сохранению чужих nft, правил и маршрутов. Оба namespace harness включены в CI/release gate; `actionlint` прошёл.
+
+Установленный в текущей среде WSL kernel не предоставляет nft TPROXY, поэтому запуск namespace-проверок там не является подтверждением реализации и завершится ограничением ядра. Используйте поддерживающую TPROXY Ubuntu LXC/VM или Linux-хост. Namespace-тест не заменяет проверку настоящих management потоков и поведения systemd на VM.
+
+На Ubuntu LXC staged Apply вернул исходный HTTP-ответ; UI перешёл из `pending` в `active` после confirm. Текущая SSH-сессия сохранила heartbeat, 12 новых SSH-соединений во время Apply прошли. Full Tunnel подтвердил VPN exit IPv4 `89.125.93.116`; DNS A/AAAA UDP/TCP через LAN и публичный resolver прошёл без WAN-пакетов port 53; UDP NTP ответил 48 байтами. Гибель активного Xray, watchdog и backend приводила к rollback и восстановлению direct-доступа. Backend restart через `ExecStartPre` recovery возвращал healthy backend и исходный direct IPv4 `194.186.91.130`.
+
+Повторное истечение lease 120 секунд прошло: `rolled_back`, table 200 пустая, SSH/API и direct-доступ доступны. Reboot из активного Full Tunnel сменил boot ID; после загрузки backend был active, API показывал `disabled`, отсутствовали policy rule `10000`, table 200 и владельческая nft table. Вернулся direct IPv4 `194.186.91.130`, DNS/master/TLS hashes сохранились. Локальный installer обновил VM из active Full Tunnel после recovery и до замены файлов; backend остался healthy, туннель был выключен, direct-доступ и hashes сохранились. Публичный GitHub release/update ещё не опубликован и не проверен. Docker, AWG runtime, kill switch и IPv6 tunnel не проверялись и остаются вне текущей реализации.
 # Проверка работающего приложения
 
 На тестовом сервере развёрнут Linux amd64 бинарник с встроенным React UI и Xray 26.3.27. Сервис запущен в отдельном transient systemd unit `ubuntu-vpn-gateway-test`; данные и секреты находятся в `/opt/ubuntu-vpn-gateway-test` с правами 0700. Учетные данные сохранены отдельно с правами 0600, в журнал systemd не выводились.
 
 HTTPS API проверен с доверенным сертификатом, полученным по SSH; обход проверки TLS не использовался. Успешно выполнены инициализация администратора, вход, импорт тестовой подписки (три узла), проверки узлов и подключение. Два узла подтвердили доступ к интернету, один не прошёл проверку через прокси. Выходные адреса успешных проверок: `80.71.226.108` и `89.125.93.116`; прямой адрес сервера — `194.186.91.130`. Независимые запросы curl через SOCKS5 127.0.0.1:1080 и HTTP 127.0.0.1:8080 подтвердили `80.71.226.108`. SSH доступен, default route остался `via 10.5.2.1 dev eth0`.
 
-URL подписки, UUID и SSH-ключи хранятся только в исключённом из Git каталоге `.ssh`; в документации не воспроизводятся. Это проверка локального проксирования, а не Full Tunnel. Установка на чистых Ubuntu разных версий и AWG runtime пока не проверены.
+URL подписки, UUID и SSH-ключи не воспроизводятся в документации и остаются в исключённом из Git каталоге `.ssh`. Это описание первоначальной проверки локального проксирования; host Full Tunnel, reboot и installer update проверены позднее в разделе staged candidate выше. AWG runtime не реализован и не проверен.
 
 При первом испытании переключения на нерабочий узел обнаружена потеря прежнего соединения. После исправления новый узел проверяется на временных портах, пока прежний Xray работает; только успешный кандидат занимает рабочие порты. Повторный тест на Ubuntu подтвердил ошибку на стадии проверки кандидата и сохранение прежнего подключения `connected` с IP `89.125.93.116`. Сервис обновлён с сохранением БД, ключей и сессии. Сценарий ошибки после остановки прежнего процесса и отмены HTTP-запроса покрыт unit-тестом с независимым контекстом восстановления, но не объявлен отдельной VM-приёмкой этого сценария.
 

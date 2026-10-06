@@ -28,12 +28,14 @@ for ARCH in amd64 arm64; do
     "$XRAY_VERSION" "$XRAY_VERSION" "$XRAY_VERSION" > "$BUNDLE/third-party/Xray-SOURCE.md"
   CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath \
     -ldflags "-s -w -X main.version=$VERSION" -o "$BUNDLE/ubuntu-vpn-gateway" ./cmd/gateway
+  CGO_ENABLED=0 GOOS=linux GOARCH="$ARCH" go build -trimpath \
+    -ldflags "-s -w -X main.version=$VERSION" -o "$BUNDLE/uvg-watchdog" ./cmd/network-watchdog
   cp scripts/install.sh scripts/bootstrap.sh scripts/update.sh scripts/uninstall.sh "$BUNDLE/scripts/"
-  cp packaging/systemd/ubuntu-vpn-gateway.service "$BUNDLE/packaging/systemd/"
-  cp docs/installation.md "$BUNDLE/docs/"
+  cp packaging/systemd/ubuntu-vpn-gateway.service packaging/systemd/uvg-watchdog@.service packaging/systemd/uvg-network-recovery.service "$BUNDLE/packaging/systemd/"
+  cp docs/*.md "$BUNDLE/docs/"
   cp LICENSE "$BUNDLE/"
   printf '%s\n' "$VERSION" > "$BUNDLE/VERSION"
-  chmod 0755 "$BUNDLE/ubuntu-vpn-gateway" "$BUNDLE/xray" "$BUNDLE/scripts/"*.sh
+  chmod 0755 "$BUNDLE/ubuntu-vpn-gateway" "$BUNDLE/xray" "$BUNDLE/uvg-watchdog" "$BUNDLE/scripts/"*.sh
   tar -C "$BUNDLE" -czf "$OUTPUT_DIR/ubuntu-vpn-gateway_${VERSION}_linux_${ARCH}.tar.gz" .
 done
 (cd "$OUTPUT_DIR" && sha256sum ubuntu-vpn-gateway_*.tar.gz > SHA256SUMS)
