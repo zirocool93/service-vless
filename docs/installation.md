@@ -1,6 +1,6 @@
 # Установка и обновление
 
-Сборка release bundle рассчитана на Ubuntu Server с systemd на `amd64` и `arm64` и включает gateway, Xray, watchdog, unit-файлы и installer; Go, Node.js, npm и unzip на сервере не требуются. Это описание состава bundle, не подтверждение публикации или release acceptance. Свежая установка не активирует Full Tunnel и не перенастраивает маршруты, nftables, DNS или сетевые интерфейсы. Update и uninstall сначала вызывают recovery существующего Full Tunnel, поэтому могут удалять только ранее созданные владельческие сетевые объекты.
+Опубликованный release `v0.2.0` рассчитан на Ubuntu Server с systemd на `amd64` и `arm64` и включает gateway, Xray, watchdog, unit-файлы, installer и все `docs/*.md`; Go, Node.js, npm и unzip на сервере не требуются. Свежая установка не активирует Full Tunnel и не перенастраивает маршруты, nftables, DNS или сетевые интерфейсы. Update и uninstall сначала вызывают recovery существующего Full Tunnel, поэтому могут удалять только ранее созданные владельческие сетевые объекты.
 
 ## Установка одной командой
 
@@ -13,7 +13,7 @@ curl -fsSL https://raw.githubusercontent.com/zirocool93/service-vless/main/scrip
 Для закреплённой версии:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/zirocool93/service-vless/main/scripts/bootstrap.sh | sudo bash -s -- --version v0.1.0
+curl -fsSL https://raw.githubusercontent.com/zirocool93/service-vless/main/scripts/bootstrap.sh | sudo bash -s -- --version v0.2.0
 ```
 
 Bootstrap обращается только к HTTPS GitHub API и GitHub Releases, выбирает asset `ubuntu-vpn-gateway_<tag>_linux_<arch>.tar.gz`, требует единственную точную запись asset в `SHA256SUMS`, проверяет SHA-256 и безопасные пути архива. Ссылки, device nodes и другие специальные файлы отклоняются. После проверки вызывается вложенный installer.
@@ -59,7 +59,7 @@ sudo ubuntu-vpn-gateway-update
 До конкретной версии:
 
 ```bash
-sudo ubuntu-vpn-gateway-update --version v0.1.0
+sudo ubuntu-vpn-gateway-update --version v0.2.0
 ```
 
 Одновременно может выполняться только один install/update. До остановки службы проверяются версии бинарников нового bundle. После остановки создаётся уникальная резервная копия прежних бинарников, SQLite вместе с WAL/SHM, секретов, unit-файла, installer/updater и manifest версии. Файлы заменяются через временное имя и atomic rename.
@@ -70,7 +70,7 @@ sudo ubuntu-vpn-gateway-update --version v0.1.0
 
 Резервные копии находятся в `/var/lib/ubuntu-vpn-gateway/backups`. Они содержат секреты и доступны только root. Автоматическое удаление backups не выполняется.
 
-VM acceptance локального финального кандидата подтвердила штатный update при активном Full Tunnel: recovery прошёл до замены файлов; после установки backend был healthy, API сообщал `disabled`, direct-доступ восстановился, hashes DNS/master/TLS не изменились. Публичный GitHub release и update через него для этого кандидата пока не опубликованы и не проверены.
+VM acceptance локального и публичного update подтвердила обновление при активном Full Tunnel. Recovery прошёл до замены файлов. Публичная команда `ubuntu-vpn-gateway-update` без аргументов установила `v0.2.0`; `version` и `installed-version` совпали, backend был active, API сообщал `disabled`, hashes DNS/master/TLS сохранились. Повторный Apply/Confirm на публичном бинарнике завершился `active` со всеми checks успешными. GitHub CI commit `eafa592` прошёл на Go 1.26/1.27; release workflow `37427945500` опубликовал latest `v0.2.0` с ровно двумя архитектурными архивами и `SHA256SUMS`.
 
 ## Формат release bundle
 
@@ -108,4 +108,4 @@ sudo /usr/local/lib/ubuntu-vpn-gateway/uninstall.sh
 
 ## Ограничения
 
-Installer не устанавливает AmneziaWG и сам не активирует Full Tunnel. Он устанавливает независимый watchdog и ранний recovery unit. Перед update/uninstall recovery снимает Full Tunnel до замены helper и остановки backend; основной service unit повторяет recovery перед каждым backend start. VM reboot acceptance подтвердила смену boot ID, запуск backend, API `disabled`, отсутствие policy rule `10000`, table 200 и владельческой nft table, восстановление исходного IP `194.186.91.130` и сохранение DNS/master/TLS hashes. Автоматического reconnect нет. Активация выполняется только отдельным prepare/apply/confirm из аутентифицированного UI. Сценарий публичного GitHub release/update ещё ожидает проверки. Подробный контракт находится в `docs/full-tunnel.md`; VM результаты приведены там же.
+Installer не устанавливает AmneziaWG и сам не активирует Full Tunnel. Он устанавливает независимый watchdog и ранний recovery unit. Перед update/uninstall recovery снимает Full Tunnel до замены helper и остановки backend; основной service unit повторяет recovery перед каждым backend start. VM reboot acceptance подтвердила смену boot ID, запуск backend, API `disabled`, отсутствие policy rule `10000`, table 200 и владельческой nft table, восстановление исходного IP `194.186.91.130` и сохранение DNS/master/TLS hashes. Публичный update из active Full Tunnel и последующий Apply/Confirm на `v0.2.0` также прошли. Автоматического reconnect нет. Активация выполняется только отдельным prepare/apply/confirm из аутентифицированного UI. Подробный контракт находится в `docs/full-tunnel.md`; VM результаты приведены там же.

@@ -27,6 +27,6 @@
 
 ## Статус и ограничения
 
-Реализованы Core Web, VLESS import/local Xray proxy, host Full Tunnel IPv4 TCP/UDP, Safe Apply/watchdog и Ubuntu installer/recovery. Docker routing, AWG runtime, kill switch, IPv6 tunnel и failover остаются backlog. Full Tunnel прошёл перечисленные namespace и Ubuntu LXC проверки, включая fault harness 10/10, lease expiry, reboot и installer update; публичный GitHub release/update ещё не опубликован/проверен. Оба namespace harness включены в CI/release gate.
+Реализованы Core Web, VLESS import/local Xray proxy, host Full Tunnel IPv4 TCP/UDP, Safe Apply/watchdog и Ubuntu installer/recovery. Docker routing, AWG runtime, kill switch, IPv6 tunnel и failover остаются backlog. Full Tunnel прошёл namespace и Ubuntu LXC проверки, включая fault harness 10/10, lease expiry, reboot, локальный и публичный update. `v0.2.0` опубликован; GitHub CI и release workflow успешны, оба namespace harness включены в CI/release gate.
 
 Подробные зависимости и критерии — в [плане](implementation-plan.md), контракты — в [архитектуре](architecture.md). Windows и CI подтверждают сборку и unit-тесты; Linux networking проверяется только в Linux namespace и на Ubuntu LXC/VM. Текущий WSL kernel не поддерживает nft TPROXY; AWG/TUN runtime не проверен.

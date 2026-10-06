@@ -1,25 +1,25 @@
 # Публикация релизов
 
-Исходный код размещается в https://github.com/zirocool93/service-vless. Релиз инициируется тегом вида `v0.1.0`; GitHub Actions сначала проверяет frontend, Go и гонки, затем собирает Linux amd64 и arm64. На сервере выполняются только готовые бинарники; сборочные зависимости не устанавливаются.
+Исходный код размещается в https://github.com/zirocool93/service-vless. Первые релизы `v0.1.0` и `v0.1.1` опубликованы ранее; текущий latest — `v0.2.0`. Для следующего выпуска используйте следующий свободный тег. GitHub Actions проверяет frontend, Go и гонки, затем собирает Linux amd64 и arm64. На сервере выполняются только готовые бинарники; сборочные зависимости не устанавливаются.
 
 ```bash
 git push origin main
-git tag -a v0.1.0 -m 'Первый рабочий выпуск VLESS-прокси'
-git push origin v0.1.0
+git tag -a v0.2.1 -m 'Следующий выпуск Ubuntu VPN Gateway'
+git push origin v0.2.1
 ```
 
-Для следующего обновления создайте следующий свободный тег, например `v0.1.1`. Существующий опубликованный тег и архивы не заменяются. Workflow создаёт draft, загружает оба архива и SHA256SUMS, скачивает их обратно, проверяет точный набор имён, размеры и SHA-256, затем публикует release. Если сборка или тесты не прошли, релиз не публикуется.
+Следующий свободный тег на момент публикации `v0.2.0` — `v0.2.1`. Существующий опубликованный тег и архивы не заменяются. Workflow создаёт draft, загружает оба архива и SHA256SUMS, скачивает их обратно, проверяет точный набор имён, размеры и SHA-256, затем публикует release. Если сборка или тесты не прошли, релиз не публикуется.
 
 Повторный запуск workflow для опубликованного релиза завершается отказом: опубликованные файлы считаются неизменяемыми. Если предыдущий запуск оставил draft, ручной запуск с тем же существующим тегом продолжает его: три ожидаемых asset перезаписываются через `--clobber`, полностью проверяются и только затем draft публикуется. Перед повтором не добавляйте в draft посторонние файлы — проверка требует точный набор из двух архивов и `SHA256SUMS`. Если draft повреждён и автоматическое продолжение снова не проходит, оставьте его неопубликованным, сохраните логи, удалите draft вручную в GitHub и повторите workflow для того же тега.
 
-Токен GitHub передаётся только шагу работы с release. Checkout не сохраняет credentials. Сборка и тесты выполняются с read-only доступом к репозиторию. Перед сборкой каждого архива workflow отдельно проверяет синтаксис всех shell-скриптов и запускает root mock-тест цепочки bootstrap/release без установки на рабочую систему runner. Оба Linux namespace harness (`tproxy_namespace.py` и `tproxy_fault_namespace.py`) входят в CI/release gate; fault harness прошёл Ubuntu прогон 10/10.
+Токен GitHub передаётся только шагу работы с release. Checkout не сохраняет credentials. Сборка и тесты выполняются с read-only доступом к репозиторию. Перед сборкой каждого архива workflow отдельно проверяет синтаксис всех shell-скриптов и запускает root mock-тест цепочки bootstrap/release без установки на рабочую систему runner. Оба Linux namespace harness (`tproxy_namespace.py` и `tproxy_fault_namespace.py`) входят в CI/release gate; fault harness прошёл Ubuntu прогон 10/10. GitHub CI commit `eafa592` прошёл на Go 1.26/1.27, а release workflow run `37427945500` успешно опубликовал `v0.2.0`.
 
-Архивы называются `ubuntu-vpn-gateway_v0.1.0_linux_amd64.tar.gz` и `ubuntu-vpn-gateway_v0.1.0_linux_arm64.tar.gz`. Внутри gateway и `uvg-watchdog` с версией через `-X main.version`, Xray, скрипты, systemd units, все `docs/*.md` и лицензии. Бинарный Xray 26.3.27 берётся без изменений из официального релиза; SHA-256 обоих upstream-архивов закреплены в `scripts/build-release.sh`. MPL-2.0 и ссылки на точные исходники включены в third-party. SHA256SUMS проверяет целостность архива; это не отдельная цифровая подпись, доверие опирается на HTTPS и доступ к GitHub.
+Последние архивы называются `ubuntu-vpn-gateway_v0.2.0_linux_amd64.tar.gz` и `ubuntu-vpn-gateway_v0.2.0_linux_arm64.tar.gz`. Опубликованный release не является draft/prerelease и содержит ровно эти два архива и `SHA256SUMS`. Внутри gateway и `uvg-watchdog` с версией через `-X main.version`, Xray, скрипты, systemd units, все `docs/*.md` и лицензии. Бинарный Xray 26.3.27 берётся без изменений из официального релиза; SHA-256 обоих upstream-архивов закреплены в `scripts/build-release.sh`. MPL-2.0 и ссылки на точные исходники включены в third-party. SHA256SUMS проверяет целостность архива; это не отдельная цифровая подпись, доверие опирается на HTTPS и доступ к GitHub.
 
-Для локальной сборки сначала соберите frontend (`npm ci && npm run build` в web), затем в Linux выполните `bash scripts/build-release.sh v0.1.0`. Локальная сборка не публикует ничего автоматически.
+Для локальной сборки сначала соберите frontend (`npm ci && npm run build` в web), затем в Linux выполните `bash scripts/build-release.sh v0.2.0`. Локальная сборка не публикует ничего автоматически.
 
 Команда обновления не меняет файлы существующего release. Она получает метаданные опубликованного тега, скачивает `SHA256SUMS` и подходящий архив, проверяет checksum и только после этого передаёт распакованный bundle installer. Draft-релизы и произвольные URL для обновления не используются.
 
 Папки `.ssh`, `.tools`, `bin`, SQLite и generated keys не должны попадать в Git или release payload. В payload используются явные списки файлов, а не архив всего рабочего каталога. Перед push проверяется история на случайные включения секретов.
 
-Локально проверенный кандидат включает host Full Tunnel для IPv4 TCP/UDP через VLESS, watchdog и systemd recovery. Повторный lease expiry, reboot с активным туннелем и локальный installer update при active Full Tunnel прошли на Ubuntu LXC. Docker routing, AWG runtime, kill switch и IPv6 tunnel не входят в реализованный объём; AWG-конфигурации можно импортировать. Публичный GitHub release/update для этого кандидата пока не опубликован и не проверен.
+Опубликованный `v0.2.0` включает host Full Tunnel для IPv4 TCP/UDP через VLESS, watchdog и systemd recovery. Повторный lease expiry, reboot с активным туннелем, локальный update и публичный `ubuntu-vpn-gateway-update` из active Full Tunnel прошли на Ubuntu LXC. После публичного обновления версия бинарника и installed-version совпали с `v0.2.0`, backend был active, API `disabled`, DNS/master/TLS hashes сохранились; повторный Apply/Confirm на публичном бинарнике завершился со всеми checks успешными. Docker routing, AWG runtime, kill switch и IPv6 tunnel не входят в реализованный объём; AWG-конфигурации можно импортировать.

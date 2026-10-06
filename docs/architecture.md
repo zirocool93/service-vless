@@ -91,7 +91,7 @@ Phase 1 добавляет Argon2id, случайный первичный па�
 
 Реализованный host Full Tunnel описан в `docs/networking-design.md`. Safe Apply сохраняет транзакцию и получает durable armed ACK watchdog до первой сетевой мутации. Затем публикуются только conntrack hooks; backend отслеживает состояние, запечатывает разрешённые SSH/UI потоки по полному 4-tuple и получает независимый flow ACK до установки маршрутов и атомарного включения intercept. Стадии watchdog: `tracking → sealing → sealed → pending`; nft правила проекта точечные, внешнее состояние сохраняется. IPv4 TCP/UDP направляются через VLESS; внешние IPv6-пакеты блокируются. Поддержка AWG-профилей, которые меняют default route, ещё не реализована.
 
-Full Tunnel нельзя принимать по проверкам Windows или WSL. Linux namespace и Ubuntu LXC acceptance текущего кандидата прошли для описанных в `docs/test-environment.md` сценариев; WSL kernel в этой среде не поддерживает требуемый nft TPROXY. Публичный GitHub release/update ещё не опубликован и не проверен. AmneziaWG runtime и его совместимость с Ubuntu/kernel не проверялись.
+Full Tunnel нельзя принимать по проверкам Windows или WSL. Linux namespace и Ubuntu LXC acceptance перечислены в `docs/test-environment.md`; WSL kernel в этой среде не поддерживает требуемый nft TPROXY. Публичный `v0.2.0` прошёл CI/release workflow и обновление VM из active Full Tunnel через публичный updater; повторный Apply/Confirm на установленном публичном бинарнике завершился с успешными checks. AmneziaWG runtime и его совместимость с Ubuntu/kernel не проверялись.
 
 ## Размещение на сервере
 

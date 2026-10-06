@@ -1,10 +1,10 @@
 # План реализации
 
-План следует ТЗ Ubuntu VPN Gateway. Реализованы Core Web, импорт VLESS/подписок, локальное проксирование Xray, host Full Tunnel IPv4 TCP/UDP и Ubuntu install/update/recovery. Docker/AWG runtime/kill switch/IPv6 tunnel и failover остаются backlog. Публичный GitHub release/update ещё не опубликован и не проверен; это не равнозначно выпуску продукта.
+План следует ТЗ Ubuntu VPN Gateway. Реализованы Core Web, импорт VLESS/подписок, локальное проксирование Xray, host Full Tunnel IPv4 TCP/UDP и Ubuntu install/update/recovery. Docker/AWG runtime/kill switch/IPv6 tunnel и failover остаются backlog. `v0.2.0` опубликован, CI/release workflow прошли; публичный updater и Full Tunnel Apply/Confirm проверены на Ubuntu LXC.
 
 ## Текущее сравнение
 
-В проекте есть Go API, HTTPS/auth, SQLite с шифрованием секретов, VLESS-парсер/подписки и Xray. Host Full Tunnel использует отдельный network-watchdog и recovery units. Namespace/Ubuntu LXC результаты, включая fault harness 10/10, повторный lease expiry, reboot с активным туннелем и installer update из active состояния, перечислены в [тестовой среде](test-environment.md). Публичный GitHub release/update остаётся непроверенным. Архитектурный target и оставшийся backlog сохранены ниже.
+В проекте есть Go API, HTTPS/auth, SQLite с шифрованием секретов, VLESS-парсер/подписки и Xray. Host Full Tunnel использует отдельный network-watchdog и recovery units. Namespace/Ubuntu LXC результаты, включая fault harness 10/10, повторный lease expiry, reboot с активным туннелем, локальный и публичный installer update, перечислены в [тестовой среде](test-environment.md). Релиз `v0.2.0` и обновление из public release проверены. Архитектурный target и оставшийся backlog сохранены ниже.
 
 ## Зависимости фаз
 
@@ -110,4 +110,4 @@ Windows не предоставляет целевые systemd, nftables, Linux 
 
 ## Фактический статус на 2026-10-06
 
-Core Web, VLESS/Xray local proxy, host Full Tunnel IPv4 TCP/UDP и Ubuntu installer/recovery реализованы. VM acceptance staged apply, rollback, lease expiry, reboot с активным туннелем и installer update из active состояния прошли. Fault namespace harness прошёл 10/10, а оба namespace harness добавлены в CI/release gate. Полный исходный MVP не завершён: Docker, AWG runtime, kill switch, IPv6 tunnel и failover остаются backlog. Проверка публичного GitHub release/update ожидается.
+Core Web, VLESS/Xray local proxy, host Full Tunnel IPv4 TCP/UDP и Ubuntu installer/recovery реализованы. VM acceptance staged apply, rollback, lease expiry, reboot с активным туннелем, локальный и публичный installer update прошли. Fault namespace harness прошёл 10/10, оба namespace harness добавлены в CI/release gate. CI commit `eafa592` и release workflow `37427945500` успешны; `v0.2.0` опубликован как latest с amd64/arm64 assets и `SHA256SUMS`. Повторный Apply/Confirm публичного бинарника завершился со всеми checks успешными. Полный исходный MVP не завершён: Docker, AWG runtime, kill switch, IPv6 tunnel и failover остаются backlog.
